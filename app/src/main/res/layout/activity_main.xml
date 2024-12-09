@@ -96,14 +96,14 @@
                         android:layout_height="wrap_content"
                         android:layout_gravity="center"
                         android:textSize="20dp"
-                        android:text="Subinterval:" />
+                        android:text="Tolerance:" />
 
                     <EditText
-                        android:id="@+id/Subinterval"
+                        android:id="@+id/Tolerance"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:ems="6"
-                        android:inputType="number" />
+                        android:inputType="numberDecimal" />
                 </LinearLayout>
 
             </LinearLayout>

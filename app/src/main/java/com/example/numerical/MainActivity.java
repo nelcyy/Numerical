@@ -15,7 +15,7 @@ import net.objecthunter.exp4j.ExpressionBuilder;
 
 public class MainActivity extends AppCompatActivity {
 
-    private EditText functionInput, lowerLimitInput, upperLimitInput, subintervalInput;
+    private EditText functionInput, lowerLimitInput, upperLimitInput, toleranceInput;
     private TextView resultOutput;
     private Button calculateButton, resetButton;
 
@@ -28,15 +28,13 @@ public class MainActivity extends AppCompatActivity {
         functionInput = findViewById(R.id.editTextText);
         lowerLimitInput = findViewById(R.id.LowerLimit);
         upperLimitInput = findViewById(R.id.UpperLimit);
-        subintervalInput = findViewById(R.id.Subinterval);
+        toleranceInput = findViewById(R.id.Tolerance);
         resultOutput = findViewById(R.id.Result);
         calculateButton = findViewById(R.id.calculate);
         resetButton = findViewById(R.id.Reset);
 
-        // Initially set Reset button visibility to GONE
         resetButton.setVisibility(View.GONE);
 
-        // Set onClick listener for the calculate button
         calculateButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -44,96 +42,109 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // Add TextWatcher to detect input changes and show Reset button
-        functionInput.addTextChangedListener(createTextWatcher());
-        lowerLimitInput.addTextChangedListener(createTextWatcher());
-        upperLimitInput.addTextChangedListener(createTextWatcher());
-        subintervalInput.addTextChangedListener(createTextWatcher());
-
-        // Set onClick listener for the Reset button
         resetButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                // Clear all input fields when the Reset button is clicked
                 functionInput.setText("");
                 lowerLimitInput.setText("");
                 upperLimitInput.setText("");
-                subintervalInput.setText("");
-
-                // Hide the Reset button after clearing the fields
+                toleranceInput.setText("");
+                resultOutput.setText("");
                 resetButton.setVisibility(View.GONE);
                 resultOutput.setVisibility(View.GONE);
             }
         });
-    }
 
-    // Method to create a TextWatcher that will show the Reset button if any EditText has input
-    private TextWatcher createTextWatcher() {
-        return new TextWatcher() {
+        TextWatcher inputWatcher = new TextWatcher() {
             @Override
-            public void beforeTextChanged(CharSequence charSequence, int start, int count, int after) {}
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
 
             @Override
-            public void onTextChanged(CharSequence charSequence, int start, int before, int count) {
-                // Check if any EditText has text and show the Reset button
-                if (functionInput.getText().length() > 0 ||
-                        lowerLimitInput.getText().length() > 0 ||
-                        upperLimitInput.getText().length() > 0 ||
-                        subintervalInput.getText().length() > 0) {
-                    resetButton.setVisibility(View.VISIBLE);
-                } else {
-                    resetButton.setVisibility(View.GONE);
-                }
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                resetButton.setVisibility(View.VISIBLE);
+                resultOutput.setVisibility(View.GONE);
             }
 
             @Override
-            public void afterTextChanged(Editable editable) {}
+            public void afterTextChanged(Editable s) {}
         };
+
+        functionInput.addTextChangedListener(inputWatcher);
+        lowerLimitInput.addTextChangedListener(inputWatcher);
+        upperLimitInput.addTextChangedListener(inputWatcher);
+        toleranceInput.addTextChangedListener(inputWatcher);
     }
 
     private void performCalculation() {
         try {
-            // Get user input
             String function = functionInput.getText().toString();
             double lowerLimit = Double.parseDouble(lowerLimitInput.getText().toString());
             double upperLimit = Double.parseDouble(upperLimitInput.getText().toString());
-            int subintervals = Integer.parseInt(subintervalInput.getText().toString());
+            double tolerance = Double.parseDouble(toleranceInput.getText().toString());
 
-            // Calculate true values using Midpoint and Trapezoid Rules with high accuracy
-            double trueValueMidpoint = calculateTrueIntegralMidpoint(function, lowerLimit, upperLimit);
-            double trueValueTrapezoid = calculateTrueIntegralTrapezoid(function, lowerLimit, upperLimit);
-
-            // Perform calculations with user-defined subintervals
-            double midpointArea = calculateMidpointRule(function, lowerLimit, upperLimit, subintervals);
-            double trapezoidArea = calculateTrapezoidRule(function, lowerLimit, upperLimit, subintervals);
-
-            // Calculate true errors
-            double midpointError = Math.abs(trueValueMidpoint - midpointArea);
-            double trapezoidError = Math.abs(trueValueTrapezoid - trapezoidArea);
-
-            // Determine which method is better
-            String betterMethod;
-            if (midpointError < trapezoidError) {
-                betterMethod = "Midpoint Rule provides a better estimation.";
-            } else {
-                betterMethod = "Trapezoid Rule provides a better estimation.";
+            if (lowerLimit >= upperLimit) {
+                resultOutput.setText("Error: Lower limit must be less than upper limit.");
+                resultOutput.setVisibility(View.VISIBLE);
+                return;
             }
 
-            // Display results
-            String result = "True Value (Midpoint Rule): " + trueValueMidpoint + "\n" +
-                    "True Value (Trapezoid Rule): " + trueValueTrapezoid + "\n\n" +
-                    "Midpoint Rule Area: " + midpointArea + "\n" +
-                    "Trapezoid Rule Area: " + trapezoidArea + "\n\n" +
-                    "Midpoint True Error: " + midpointError + "\n" +
-                    "Trapezoid True Error: " + trapezoidError + "\n\n" +
+            // Calculate the true value of the integral
+            double trueValue = calculateTrueIntegral(function, lowerLimit, upperLimit);
+
+            // Determine the number of subintervals required for both rules
+            int midpointSubintervals = findRequiredSubintervals(function, lowerLimit, upperLimit, trueValue, tolerance, true);
+            int trapezoidSubintervals = findRequiredSubintervals(function, lowerLimit, upperLimit, trueValue, tolerance, false);
+
+            // Calculate areas for both methods
+            double midpointArea = calculateMidpointRule(function, lowerLimit, upperLimit, midpointSubintervals);
+            double trapezoidArea = calculateTrapezoidRule(function, lowerLimit, upperLimit, trapezoidSubintervals);
+
+            // Calculate their respective true errors
+            double midpointError = Math.abs(trueValue - midpointArea);
+            double trapezoidError = Math.abs(trueValue - trapezoidArea);
+
+            // Determine which method performs better
+            String betterMethod = "";
+            if (midpointError < trapezoidError) {
+                betterMethod = "Midpoint Rule is better with a smaller error.";
+            } else if (trapezoidError < midpointError) {
+                betterMethod = "Trapezoid Rule is better with a smaller error.";
+            } else {
+                betterMethod = "Both methods have the same error.";
+            }
+
+            // Display the results
+            String result = "True Value: " + trueValue + "\n\n" +
+                    "Midpoint Rule:\n" +
+                    "  - Required Subintervals: " + midpointSubintervals + "\n" +
+                    "  - Area: " + midpointArea + "\n" +
+                    "  - Error: " + midpointError + "\n\n" +
+                    "Trapezoid Rule:\n" +
+                    "  - Required Subintervals: " + trapezoidSubintervals + "\n" +
+                    "  - Area: " + trapezoidArea + "\n" +
+                    "  - Error: " + trapezoidError + "\n\n" +
                     betterMethod;
 
             resultOutput.setText(result);
             resultOutput.setVisibility(View.VISIBLE);
-
         } catch (Exception e) {
-            resultOutput.setText("Error in input or calculation: " + e.getMessage());
+            resultOutput.setText("Error: " + e.getMessage());
+            resultOutput.setVisibility(View.VISIBLE);
         }
+    }
+
+    private int findRequiredSubintervals(String function, double lower, double upper, double trueValue, double tolerance, boolean useMidpoint) {
+        int subintervals = 1;
+        double error;
+
+        do {
+            double area = useMidpoint ? calculateMidpointRule(function, lower, upper, subintervals)
+                    : calculateTrapezoidRule(function, lower, upper, subintervals);
+            error = Math.abs(trueValue - area);
+            subintervals++;
+        } while (error > tolerance);
+
+        return subintervals - 1;
     }
 
     private double calculateMidpointRule(String function, double lower, double upper, int n) {
@@ -159,34 +170,29 @@ public class MainActivity extends AppCompatActivity {
         return area * width;
     }
 
-    // High-accuracy true integral using the Midpoint Rule
-    private double calculateTrueIntegralMidpoint(String function, double lower, double upper) {
-        int steps = 1000; // High number of steps for better accuracy
-        double width = (upper - lower) / steps;
-        double integral = 0.0;
-
-        for (int i = 0; i < steps; i++) {
-            double midpoint = lower + (i + 0.5) * width;
-            integral += evaluateFunction(function, midpoint);
+    private double calculateTrueIntegral(String function, double lower, double upper) {
+        int n = 1000; // Ensure n is even for Simpson's Rule
+        if (n % 2 != 0) {
+            n++;
         }
 
-        return integral * width;
-    }
+        double h = (upper - lower) / n; // Step size
+        double integral = evaluateFunction(function, lower) + evaluateFunction(function, upper);
 
-    // High-accuracy true integral using the Trapezoid Rule
-    private double calculateTrueIntegralTrapezoid(String function, double lower, double upper) {
-        int steps = 1000; // High number of steps for better accuracy
-        double width = (upper - lower) / steps;
-        double integral = 0.0;
-
-        for (int i = 0; i < steps; i++) {
-            double x1 = lower + i * width;
-            double x2 = lower + (i + 1) * width;
-            integral += 0.5 * (evaluateFunction(function, x1) + evaluateFunction(function, x2)) * width;
+        // Simpson's Rule loop
+        for (int i = 1; i < n; i++) {
+            double x = lower + i * h;
+            if (i % 2 == 0) { // Even index
+                integral += 2 * evaluateFunction(function, x);
+            } else { // Odd index
+                integral += 4 * evaluateFunction(function, x);
+            }
         }
 
+        integral *= h / 3.0; // Multiply by h/3 to complete the formula
         return integral;
     }
+
 
     private double evaluateFunction(String function, double x) {
         try {
